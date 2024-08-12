@@ -21,7 +21,7 @@ parse_report('NAGA html content')
 
 命令行：
 ```shell
-python naga_session.py <naga牌谱网址> <Mortal牌谱id>
+python naga_helper/analyzer.py <naga牌谱网址> <Mortal牌谱id>
 ```
 其中Mortal牌谱id为选填，如果填写，则会把Mortal的切牌选择合并入NAGA牌谱报告。恶手率/一致率/Rating的计算方式与NAGA一致。
 
@@ -29,7 +29,7 @@ naga牌谱地址可以同时省略前缀与后缀，只保留html key。
 
 格式参考：
 ```shell
-python naga_session.py https://naga.dmv.nico/htmls/9a852e2e3a273e1d5a362d69618000684340d3e0e96024e6fa07858afa1afa00v2_2.html 01f7faef6dc7fe5e
+python naga_helper/analyzer.py https://naga.dmv.nico/htmls/9a852e2e3a273e1d5a362d69618000684340d3e0e96024e6fa07858afa1afa00v2_2.html 01f7faef6dc7fe5e
 
 ```
 
