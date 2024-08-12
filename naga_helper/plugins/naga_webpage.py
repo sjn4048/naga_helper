@@ -85,12 +85,16 @@ keyboard_shortcut = '''
                     nextGameButton.click();
                 }
                 break;
+            case 'w':
+            case 'W':
             case 'ArrowUp':
                 // 向上箭头，选择上一个选项
                 selectElement.selectedIndex = (selectElement.selectedIndex - 1 + selectElement.length) % selectElement.length;
                 // 手动触发 change 事件
                 selectElement.dispatchEvent(new Event('change', { bubbles: true }));
                 break;
+            case 's':
+            case 'S':
             case 'ArrowDown':
                 // 向下箭头，选择下一个选项
                 selectElement.selectedIndex = (selectElement.selectedIndex + 1) % selectElement.length;
