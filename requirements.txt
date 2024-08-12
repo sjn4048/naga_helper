@@ -1,0 +1,7 @@
+demjson3~=3.0.5
+numpy~=1.24.1
+requests~=2.31.0
+bs4~=0.0.1
+beautifulsoup4~=4.11.1
+mahjong~=1.2.1
+setuptools~=65.5.1

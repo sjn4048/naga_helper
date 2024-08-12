@@ -14,7 +14,7 @@ import requests
 
 def merge_tenhou_log_to_one(records: list[str], returns_prefix: bool = True) -> str:
     # 使用第一个牌谱的title, name, rule，合并所有牌谱的log
-    logs = [json.loads(r.replace('https://tenhou.net/6/#json=', ''))['log'] for r in records]  # 获取JSON字符串
+    logs = [json.loads(_r.replace('https://tenhou.net/6/#json=', ''))['log'] for _r in records]  # 获取JSON字符串
     # 解析URL
     first_json_str = records[0].replace('https://tenhou.net/6/#json=', '')
 
@@ -26,6 +26,80 @@ def merge_tenhou_log_to_one(records: list[str], returns_prefix: bool = True) -> 
     if returns_prefix:
         return 'https://tenhou.net/6/#json=' + ret
     return ret
+
+
+_naga_B = {
+    "1m": 0,
+    "2m": 1,
+    "3m": 2,
+    "4m": 3,
+    "5m": 4,
+    "5mr": 4.1,
+    "6m": 5,
+    "7m": 6,
+    "8m": 7,
+    "9m": 8,
+    "1p": 9,
+    "2p": 10,
+    "3p": 11,
+    "4p": 12,
+    "5p": 13,
+    "5pr": 13.1,
+    "6p": 14,
+    "7p": 15,
+    "8p": 16,
+    "9p": 17,
+    "1s": 18,
+    "2s": 19,
+    "3s": 20,
+    "4s": 21,
+    "5s": 22,
+    "5sr": 22.1,
+    "6s": 23,
+    "7s": 24,
+    "8s": 25,
+    "9s": 26,
+    "E": 27,
+    "S": 28,
+    "W": 29,
+    "N": 30,
+    "P": 31,
+    "F": 32,
+    "C": 33,
+    "?": 34,
+    "1z": 27,
+    "2z": 28,
+    "3z": 29,
+    "4z": 30,
+    "5z": 31,
+    "6z": 32,
+    "7z": 33,
+}
+
+_naga_B_rev = {v: k for k, v in _naga_B.items()}
+
+# NAGA定义的副露类型
+_naga_huro_types = {
+    'pass': '0',
+    'chi1': '1',  # 吃最小的牌
+    'chi2': '2',  # 吃中间的牌
+    'chi3': '3',  # 吃最大的牌
+    'pon': '4',
+    'kan': '5'
+}
+
+_naga_replace_d = {
+    'E': '1z',
+    'S': '2z',
+    'W': '3z',
+    'N': '4z',
+    'P': '5z',
+    'F': '6z',
+    'C': '7z'
+}
+
+_total_hais = [f'{x}s' for x in range(1, 10)] + [f'{x}p' for x in range(1, 10)] + [f'{x}m' for x in range(1, 10)] + [
+    f'{x}z' for x in range(1, 8)]
 
 
 def _to_mortal_text(naga_text: str) -> str:
@@ -122,77 +196,8 @@ def _get_riichi_pai(tehai: list[str]) -> list[str]:
 
 
 def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
-    B = {
-        "1m": 0,
-        "2m": 1,
-        "3m": 2,
-        "4m": 3,
-        "5m": 4,
-        "5mr": 4.1,
-        "6m": 5,
-        "7m": 6,
-        "8m": 7,
-        "9m": 8,
-        "1p": 9,
-        "2p": 10,
-        "3p": 11,
-        "4p": 12,
-        "5p": 13,
-        "5pr": 13.1,
-        "6p": 14,
-        "7p": 15,
-        "8p": 16,
-        "9p": 17,
-        "1s": 18,
-        "2s": 19,
-        "3s": 20,
-        "4s": 21,
-        "5s": 22,
-        "5sr": 22.1,
-        "6s": 23,
-        "7s": 24,
-        "8s": 25,
-        "9s": 26,
-        "E": 27,
-        "S": 28,
-        "W": 29,
-        "N": 30,
-        "P": 31,
-        "F": 32,
-        "C": 33,
-        "?": 34,
-        "1z": 27,
-        "2z": 28,
-        "3z": 29,
-        "4z": 30,
-        "5z": 31,
-        "6z": 32,
-        "7z": 33,
-    }
+    naga_replace_d_rev = {v: k for k, v in _naga_replace_d.items()}
 
-    naga_replace_d = {
-        'E': '1z',
-        'S': '2z',
-        'W': '3z',
-        'N': '4z',
-        'P': '5z',
-        'F': '6z',
-        'C': '7z'
-    }
-
-    # NAGA定义的副露类型
-    huro_types = {
-        'pass': '0',
-        'chi1': '1',  # 吃最小的牌
-        'chi2': '2',  # 吃中间的牌
-        'chi3': '3',  # 吃最大的牌
-        'pon': '4',
-        'kan': '5'
-    }
-
-    naga_replace_d_rev = {v: k for k, v in naga_replace_d.items()}
-
-    B_rev = {v: k for k, v in B.items()}
     try:
         mortal_data = json.loads(mortal_text)
     except json.decoder.JSONDecodeError:
@@ -240,7 +245,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
             # 计算每个元素的误差
             fractional_parts = [(x * scale_factor) - int(x * scale_factor) for x in lst]
             # 按误差的绝对值排序
-            sorted_indices = sorted(range(len(lst)), key=lambda i: fractional_parts[i], reverse=(error > 0))
+            sorted_indices = sorted(range(len(lst)), key=lambda _i: fractional_parts[_i], reverse=(error > 0))
 
             # 调整误差
             for i in sorted_indices:
@@ -355,7 +360,8 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                     action = m_action['action']
 
                     if action['type'] == 'dahai':
-                        m_pred[int(B[action['pai']])] += math.ceil(m_action['prob'] / sum_dahai_prob * naga_prob_sum)
+                        m_pred[int(_naga_B[action['pai']])] += math.ceil(
+                            m_action['prob'] / sum_dahai_prob * naga_prob_sum)
                     if action['type'] == 'reach':
                         # dama自摸的时候可能没有reach条
                         if 'reach' in n_turn:
@@ -365,11 +371,11 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
 
                     if action['type'] == 'pon':
                         pon_prob = math.ceil(m_action['prob'] * naga_prob_sum)
-                        huro_info[huro_types['pon']] = pon_prob
+                        huro_info[_naga_huro_types['pon']] = pon_prob
                         # print(f'pon: {pon_prob}')
                     if action['type'] == 'none':
                         none_prob = math.ceil(m_action['prob'] * naga_prob_sum)
-                        huro_info[huro_types['pass']] = none_prob
+                        huro_info[_naga_huro_types['pass']] = none_prob
                         # print(f'none: {none_prob}')
                     if action['type'] == 'chi':
                         # 需要判定是哪一种吃
@@ -382,7 +388,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                         else:
                             naki_act = 'chi2'
                         chi_prob = math.ceil(m_action['prob'] * naga_prob_sum)
-                        huro_info[huro_types[naki_act]] = chi_prob
+                        huro_info[_naga_huro_types[naki_act]] = chi_prob
                         # print(f'{naki_act}: {chi_prob}')
                     if action['type'] == 'kan':
                         if can_dahai:
@@ -393,7 +399,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                             kan_prob = math.ceil(m_action['prob'] * naga_prob_sum)
 
                         n_turn['kan'][-1] = kan_prob
-                        huro_info[huro_types['kan']] = kan_prob
+                        huro_info[_naga_huro_types['kan']] = kan_prob
                         # print(f'kan: {kan_prob}')
                 if is_naki_turn:
                     # print(f'changed huro_info: {huro_info}')
@@ -421,35 +427,25 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                     if riichi_m_turn and riichi_m_turn['tiles_left'] == m_turn['tiles_left']:  # 应对多种立直选择
                         for a in riichi_m_turn['details']:
                             if a['action']['type'] == 'dahai':
-                                m_pred[int(B[a['action']['pai']])] += int(a['prob'] * naga_prob_sum * m_riichi_prob)
+                                m_pred[int(_naga_B[a['action']['pai']])] += int(
+                                    a['prob'] * naga_prob_sum * m_riichi_prob)
                     else:
                         # 只有一种立直选择
                         assert len(riichi_candidates) == 1, riichi_candidates
-                        m_pred[int(B[riichi_candidates[0]])] += naga_prob_sum * m_riichi_prob
+                        m_pred[int(_naga_B[riichi_candidates[0]])] += naga_prob_sum * m_riichi_prob
 
                 m_pred = _normalize_to_sum(m_pred, naga_prob_sum, precise=False)
                 # 将Mortal结果写回NAGA
                 if 'dahai_pred' in n_turn:
                     n_turn['dahai_pred'][-1] = m_pred
                     n_turn['info']['msg']['pred_dahai'][-1] = (
-                        naga_replace_d_rev.get(B_rev[np.argmax(m_pred)], B_rev[np.argmax(m_pred)]))
+                        naga_replace_d_rev.get(_naga_B_rev[np.argmax(m_pred)], _naga_B_rev[np.argmax(m_pred)]))
                 try:
                     m_turn = next(m_turns_iter, None)  # 本turn信息使用完毕，跳下一turn
                 except StopIteration:
                     pass
 
     return _write_back_to_naga(naga_dict, naga_text)
-
-
-naga_replace_d = {
-    'E': '1z',
-    'S': '2z',
-    'W': '3z',
-    'N': '4z',
-    'P': '5z',
-    'F': '6z',
-    'C': '7z'
-}
 
 
 def _naga_tehai_to_tiles(tehai: list[str], nakis: list[str] = None):
@@ -464,7 +460,7 @@ def _naga_tehai_to_tiles(tehai: list[str], nakis: list[str] = None):
             raise ex
 
     ms, ps, ss, zs = [], [], [], []
-    tehai = sorted([naga_replace_d.get(x, x) for x in tehai])
+    tehai = sorted([_naga_replace_d.get(x, x) for x in tehai])
     for t in tehai:
         if t[1] == 'm':
             ms.append(t[0])
@@ -477,17 +473,13 @@ def _naga_tehai_to_tiles(tehai: list[str], nakis: list[str] = None):
     return TilesConverter.string_to_34_array(man=''.join(ms), pin=''.join(ps), sou=''.join(ss), honors=''.join(zs))
 
 
-total_hais = [f'{x}s' for x in range(1, 10)] + [f'{x}p' for x in range(1, 10)] + [f'{x}m' for x in range(1, 10)] + [
-    f'{x}z' for x in range(1, 8)]
-
-
-def _calculate_maisuu(tehai: list[str], visible_maisuu: dict[str, int], nakis: list[str] = None) -> tuple[
-    int, list[str]]:
+def _calculate_maisuu(tehai: list[str], visible_maisuu: dict[str, int], nakis: list[str] = None) \
+        -> tuple[int, list[str]]:
     # 计算进张枚数
     result = 0
     result_hais = []
     assert len(tehai) == 13, tehai
-    assert len(total_hais) == 34, total_hais
+    assert len(_total_hais) == 34, _total_hais
     st = Shanten()
     current_st = st.calculate_shanten(_naga_tehai_to_tiles(tehai, nakis))
     if current_st == 0:
@@ -496,7 +488,7 @@ def _calculate_maisuu(tehai: list[str], visible_maisuu: dict[str, int], nakis: l
     count_dict = defaultdict(int)
     for t in tehai:
         count_dict[t] += 1
-    for x in total_hais:
+    for x in _total_hais:
         if count_dict[x] == 4:
             continue
         # 枚举可能摸进的所有牌，看是否能推进向听
@@ -511,11 +503,11 @@ def _calculate_maisuu(tehai: list[str], visible_maisuu: dict[str, int], nakis: l
 
 def _to_normal_hai(s: str) -> str:
     # 转化成标准的1-9mps1-7z格式，忽略赤宝
-    return naga_replace_d.get(s, s).removesuffix('r')
+    return _naga_replace_d.get(s, s).removesuffix('r')
 
 
 @functools.lru_cache(maxsize=100, typed=False)
-def real_parse_report(text: str) -> dict:
+def parse_report(text: str) -> dict:
     soup = BeautifulSoup(text, 'html.parser')
     # read variables
     script_tags = soup.find_all('script')
@@ -559,60 +551,12 @@ def real_parse_report(text: str) -> dict:
         raise NotImplementedError('Does not support oldest naga reports')
     naga_types = {int(k): v for k, v in naga_types.items()}
     one_naga_idx = list(naga_types.keys())[0]  # 当不需要指定nagaType的时候，随便用一个
-    B = {
-        "1m": 0,
-        "2m": 1,
-        "3m": 2,
-        "4m": 3,
-        "5m": 4,
-        "5mr": 4.1,
-        "6m": 5,
-        "7m": 6,
-        "8m": 7,
-        "9m": 8,
-        "1p": 9,
-        "2p": 10,
-        "3p": 11,
-        "4p": 12,
-        "5p": 13,
-        "5pr": 13.1,
-        "6p": 14,
-        "7p": 15,
-        "8p": 16,
-        "9p": 17,
-        "1s": 18,
-        "2s": 19,
-        "3s": 20,
-        "4s": 21,
-        "5s": 22,
-        "5sr": 22.1,
-        "6s": 23,
-        "7s": 24,
-        "8s": 25,
-        "9s": 26,
-        "E": 27,
-        "S": 28,
-        "W": 29,
-        "N": 30,
-        "P": 31,
-        "F": 32,
-        "C": 33,
-        "?": 34,
-        "1z": 27,
-        "2z": 28,
-        "3z": 29,
-        "4z": 30,
-        "5z": 31,
-        "6z": 32,
-        "7z": 33,
-    }
 
     # 恶手解析
     # 当有人立直时不打危险牌
     # 牌效率（进张枚数）
     # etc.
 
-    game_count = len(variables_dict['pred'])
     for game_idx, game in enumerate(variables_dict['pred']):
         last_actor_idx = None
         last_expect_rank = None
@@ -699,7 +643,7 @@ def real_parse_report(text: str) -> dict:
                 continue
 
             real_dahai = _to_normal_hai(real_dahai)  # TODO：目前对赤的处理缺失
-            real = int(B[real_dahai])
+            real = int(_naga_B[real_dahai])
             last_actor_idx = actor_idx
             last_expect_rank = expect_ranks[last_actor_idx]
             for a_idx in range(4):
@@ -751,7 +695,7 @@ def real_parse_report(text: str) -> dict:
             my_danger = total_danger[real] - total_danger.min()
             decision_danger[actor_name] += my_danger
             # 手里14张牌的危险度
-            my_hand_danger = total_danger[[int(B[x]) for x in tehais_14]]
+            my_hand_danger = total_danger[[int(_naga_B[x]) for x in tehais_14]]
             # 切出手牌的危险度
             discard_danger_order = len([x for x in my_hand_danger if x >= my_hand_danger[tehais_14.index(real_dahai)]])
 
@@ -784,7 +728,7 @@ def real_parse_report(text: str) -> dict:
                     real_maisuu, _ = _calculate_maisuu(tehais[actor_idx], visible_maisuu[actor_idx], nakis[actor_idx])
                     tehais_after_pred = tehais_14.copy()
                     for t in tehais_after_pred:
-                        if int(B[t]) == pred:
+                        if int(_naga_B[t]) == pred:
                             pred_name = t
                             tehais_after_pred.remove(t)
                             break
@@ -813,8 +757,8 @@ def real_parse_report(text: str) -> dict:
                         'situation': situation_tags,
                         'game': game_name,
                         'turn': actor_rounds[actor_idx],
-                        'pred': naga_replace_d.get(pred_name, pred_name),
-                        'real': naga_replace_d.get(real_dahai, real_dahai)
+                        'pred': _naga_replace_d.get(pred_name, pred_name),
+                        'real': _naga_replace_d.get(real_dahai, real_dahai)
                     })
 
             # NAGA不同模型的一致性
@@ -849,113 +793,6 @@ def real_parse_report(text: str) -> dict:
     return ret
 
 
-inject_js_keyboard_shortcut = '''
-(function() {
-    // 保存原始的 console.log 函数
-    const originalConsoleLog = console.log;
-
-    // 重写 console.log 函数
-    console.log = function(message, ...optionalParams) {
-        // 调用原始的 console.log 函数
-        originalConsoleLog.apply(console, [message, ...optionalParams]);
-
-        // 检查是否输出了 'finished'
-        if (typeof message === 'string' && message.includes('総局数')) {
-            setTimeout(() => {
-                // 获取 URL 中的参数
-                const urlParams = new URLSearchParams(window.location.search);
-                const mainParam = urlParams.get('main');
-                // 获取 <select> 元素
-                const selectElement = document.querySelector('#app > div > div > div:nth-child(1) > div.column.is-one-quarter > div.columns > div > div:nth-child(2) > select');
-                if (mainParam && selectElement) {
-                    // 查找 <option> 元素中 text 等于 mainParam 的选项
-                    for (let i = 0; i < selectElement.options.length; i++) {
-                        if (selectElement.options[i].text === mainParam) {
-                            // 设置新的选中项
-                            selectElement.selectedIndex = i;
-                            // 手动触发 change 事件
-                            selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-                            break;
-                        }
-                    }
-                }
-                }, 100);
-        }
-    };
-
-    // 键盘事件监听器
-    document.addEventListener('keydown', function(event) {
-        // 获取前、后、last error、next error按钮的元素
-        const prevButton = document.querySelector('#app > div > div > div:nth-child(1) > div.column.is-one-quarter > div.columns > div > div.columns.is-multiline.is-mobile > button:nth-child(3)');
-        const nextButton = document.querySelector('#app > div > div > div:nth-child(1) > div.column.is-one-quarter > div.columns > div > div.columns.is-multiline.is-mobile > button:nth-child(4)');
-        const lastErrorButton = document.querySelector('#app > div > div > div:nth-child(1) > div.column.is-one-quarter > div.columns > div > div.columns.is-multiline.is-mobile > button:nth-child(5)');
-        const nextErrorButton = document.querySelector('#app > div > div > div:nth-child(1) > div.column.is-one-quarter > div.columns > div > div.columns.is-multiline.is-mobile > button:nth-child(6)');
-        const lastGameButton = document.querySelector('#app > div > div > div:nth-child(1) > div.column.is-one-quarter > div.columns > div > div.columns.is-multiline.is-mobile > button:nth-child(1)');
-        const nextGameButton = document.querySelector('#app > div > div > div:nth-child(1) > div.column.is-one-quarter > div.columns > div > div.columns.is-multiline.is-mobile > button:nth-child(2)');
-        const selectElement = document.querySelector('#app > div > div > div:nth-child(1) > div.column.is-one-quarter > div.columns > div > div:nth-child(5) > select');
-        if (!selectElement) {
-            console.error('Select element not found');
-            return;
-        }
-        switch(event.key) {
-            case 'a':
-            case 'A':
-            case 'ArrowLeft':
-                if (prevButton) {
-                    prevButton.click();
-                }
-                break;
-            case 'd':
-            case 'D':
-            case 'ArrowRight':
-                if (nextButton) {
-                    nextButton.click();
-                }
-                break;
-            case 'q':
-            case 'Q':
-                if (lastErrorButton) {
-                    lastErrorButton.click();
-                }
-                break;
-            case 'e':
-            case 'E':
-                if (nextErrorButton) {
-                    nextErrorButton.click();
-                }
-                break;
-            case 'z':
-            case 'Z':
-                if (lastGameButton) {
-                    lastGameButton.click();
-                }
-                break;     
-            case 'c':
-            case 'C':
-                if (nextGameButton) {
-                    nextGameButton.click();
-                }
-                break;
-            case 'ArrowUp':
-                // 向上箭头，选择上一个选项
-                selectElement.selectedIndex = (selectElement.selectedIndex - 1 + selectElement.length) % selectElement.length;
-                // 手动触发 change 事件
-                selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-                break;
-            case 'ArrowDown':
-                // 向下箭头，选择下一个选项
-                selectElement.selectedIndex = (selectElement.selectedIndex + 1) % selectElement.length;
-                // 手动触发 change 事件
-                selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-                break;   
-            default:
-                break;
-        }
-    });
-})();
-'''
-
-
 if __name__ == '__main__':
     naga_url = sys.argv[1]
     if 'naga.dmv.nico' not in naga_url:
@@ -973,6 +810,5 @@ if __name__ == '__main__':
     if mtk:
         # 需要合并Mortal进来
         mortal_url = f'https://mjai.ekyu.moe/report/{mtk}.json'
-        mortal_text = requests.get(mortal_url).text
-        content = merge_mortal_to_naga(content, mortal_text)
+        content = merge_mortal_to_naga(content, requests.get(mortal_url).text)
     print(real_parse_report(content))
