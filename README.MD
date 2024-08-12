@@ -13,6 +13,13 @@ pip install naga_helper
 ### analyzer
 分析现有NAGA牌谱报告，使用方式如下：
 
+导入pip包：
+```python
+from naga_helper.analyzer import parse_report
+parse_report('NAGA html content')
+```
+
+命令行：
 ```shell
 python naga_session.py <naga牌谱网址> <Mortal牌谱id>
 ```

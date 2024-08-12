@@ -811,4 +811,4 @@ if __name__ == '__main__':
         # 需要合并Mortal进来
         mortal_url = f'https://mjai.ekyu.moe/report/{mtk}.json'
         content = merge_mortal_to_naga(content, requests.get(mortal_url).text)
-    print(real_parse_report(content))
+    print(parse_report(content))
