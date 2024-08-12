@@ -340,26 +340,22 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                     huro_info = {}
 
                 # 下面的解析分为两次遍历；第一次获取是否有加杠/立直等meta信息，第二次真正做数据处理
-                kan_prob_sum = 0  # 有可能有多个加杠选择，因此需要累积
-                riiichi_prob_sum = 0  # Mortal的立直只有一个选项，理论上不需要累积，但这里还是这样写，来保证统一
                 max_dahai_prob = 0
+                sum_dahai_prob = 0  # 计算所有切牌（非立直、非加杠）概率之和。注意，这里要使用累加切牌概率，而不是1减去立直/加杠的概率，因为有时候Mortal的prob给的过于极端，使1 - riichi_prob_sum - kan_prob_sum之后为0，导致除0异常
                 can_dahai = False
                 for ma in m_turn['details']:
                     at = ma['action']['type']
                     ap = ma['prob']
                     if at == 'dahai':
                         can_dahai = True
+                        sum_dahai_prob += ap
                         max_dahai_prob = max(max_dahai_prob, ap)
-                    if at == 'kan':
-                        kan_prob_sum += ap
-                    if at == 'reach':
-                        riiichi_prob_sum += ap
 
                 for m_action in m_turn['details']:
                     action = m_action['action']
 
                     if action['type'] == 'dahai':
-                        m_pred[int(B[action['pai']])] += math.ceil(m_action['prob'] / (1 - kan_prob_sum - riiichi_prob_sum) * naga_prob_sum)
+                        m_pred[int(B[action['pai']])] += math.ceil(m_action['prob'] / sum_dahai_prob * naga_prob_sum)
                     if action['type'] == 'reach':
                         # dama自摸的时候可能没有reach条
                         if 'reach' in n_turn:
