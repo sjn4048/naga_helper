@@ -626,8 +626,14 @@ def parse_report(text: str) -> dict:
                     count_dict[_to_normal_hai(t)] += 1
                 # 从下一turn的数据中找杠了哪个
                 next_turn = game[turn_idx + 1]
-                assert 'kan' in next_turn['info']['msg']['type'], next_turn  # ankan / kakan
-                k = _to_normal_hai(next_turn['info']['msg']['pai'])
+                next_turn_t = next_turn['info']['msg']['type']
+                if next_turn_t == 'kakan':
+                    k = _to_normal_hai(next_turn['info']['msg']['pai'])
+                elif next_turn_t == 'ankan':
+                    k = _to_normal_hai(next_turn['info']['msg']['consumed'][0])
+                else:
+                    raise ValueError(f'Expected ankan/kakan after real_dahai == ?. Got {next_turn_t}')
+
                 for a_idx in range(4):
                     visible_maisuu[a_idx][k] = 4
 
