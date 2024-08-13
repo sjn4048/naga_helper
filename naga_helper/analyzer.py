@@ -624,22 +624,17 @@ def parse_report(text: str) -> dict:
                 tehais[actor_idx].append(new_pai)
                 for t in tehais[actor_idx]:
                     count_dict[_to_normal_hai(t)] += 1
-                # 找出出现次数为4的元素
-                kans = [item for item, count in count_dict.items() if count == 4]
-                if len(kans) >= 2:
-                    kans = [_to_normal_hai(turn['info']['msg']['pai'])]  # 多个杠材时候使用pai
-                elif len(kans) == 0:
-                    print(f'未找到可以暗杠的对象:', turn["info"])
-                    raise ValueError(f'未找到可以暗杠的对象: {game_name} {actor_name} {actor_rounds[actor_idx]}'
-                                     f'')
-                k = kans[0]
+                # 从下一turn的数据中找杠了哪个
+                next_turn = game[turn_idx + 1]
+                assert 'kan' in next_turn['info']['msg']['type'], next_turn  # ankan / kakan
+                k = _to_normal_hai(next_turn['info']['msg']['pai'])
                 for a_idx in range(4):
                     visible_maisuu[a_idx][k] = 4
 
                 if nakis[actor_idx].count(k) < 3:
                     # 暗杠，加入副露牌；明杠不加
                     nakis[actor_idx].extend([k, k, k])
-                tehais[actor_idx].remove(kans[0])
+                tehais[actor_idx].remove(k)
                 continue
 
             real_dahai = _to_normal_hai(real_dahai)  # TODO：目前对赤的处理缺失
@@ -659,6 +654,7 @@ def parse_report(text: str) -> dict:
 
             # 摸牌前的向听
             shanten_before = stc.calculate_shanten(_naga_tehai_to_tiles(tehais[actor_idx], nakis[actor_idx]))
+
             # 摸到的牌加入手牌计算向听
             if turn['info']['msg']['type'] != 'tsumo':
                 for h in turn['info']['msg']['consumed']:
