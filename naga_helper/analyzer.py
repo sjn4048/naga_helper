@@ -347,6 +347,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                 # 下面的解析分为两次遍历；第一次获取是否有加杠/立直等meta信息，第二次真正做数据处理
                 max_dahai_prob = 0
                 sum_dahai_prob = 0  # 计算所有切牌（非立直、非加杠）概率之和。注意，这里要使用累加切牌概率，而不是1减去立直/加杠的概率，因为有时候Mortal的prob给的过于极端，使1 - riichi_prob_sum - kan_prob_sum之后为0，导致除0异常
+                none_prob = -1  # 计算鸣牌巡 pass 的比例
                 can_dahai = False
                 for ma in m_turn['details']:
                     at = ma['action']['type']
@@ -355,26 +356,30 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                         can_dahai = True
                         sum_dahai_prob += ap
                         max_dahai_prob = max(max_dahai_prob, ap)
+                    if at == 'none':
+                        none_prob = ap
 
                 for m_action in m_turn['details']:
                     action = m_action['action']
 
+                    ap = m_action['prob']
                     if action['type'] == 'dahai':
                         m_pred[int(_naga_B[action['pai']])] += math.ceil(
-                            m_action['prob'] / sum_dahai_prob * naga_prob_sum)
+                            ap / sum_dahai_prob * naga_prob_sum)
                     if action['type'] == 'reach':
                         # dama自摸的时候可能没有reach条
                         if 'reach' in n_turn:
                             # 为了让立直条过线，立直概率不需要超过50%，仅需超过所有非立直切牌的max(prob)即可
                             n_turn['reach'][-1] = math.ceil(
-                                m_action['prob'] / (max_dahai_prob + m_action['prob']) * naga_prob_sum)
+                                ap / (max_dahai_prob + ap) * naga_prob_sum)
 
                     if action['type'] == 'pon':
-                        pon_prob = math.ceil(m_action['prob'] * naga_prob_sum)
+                        assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
+                        pon_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
                         huro_info[_naga_huro_types['pon']] = pon_prob
                         # print(f'pon: {pon_prob}')
                     if action['type'] == 'none':
-                        none_prob = math.ceil(m_action['prob'] * naga_prob_sum)
+                        none_prob = math.ceil(ap * naga_prob_sum)
                         huro_info[_naga_huro_types['pass']] = none_prob
                         # print(f'none: {none_prob}')
                     if action['type'] == 'chi':
@@ -387,16 +392,23 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                             naki_act = 'chi3'
                         else:
                             naki_act = 'chi2'
-                        chi_prob = math.ceil(m_action['prob'] * naga_prob_sum)
+                        assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
+                        if abs(ap-0.3850) < 0.001:
+                            print(ap, none_prob)
+                        chi_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
+                        if abs(ap-0.3850) < 0.001:
+                            print(chi_prob)
+                        # print(chi_prob)
                         huro_info[_naga_huro_types[naki_act]] = chi_prob
                         # print(f'{naki_act}: {chi_prob}')
                     if action['type'] == 'kan':
                         if can_dahai:
                             # 同理，暗杠/加杠概率不需要超过50%，仅需超过所有非加杠切牌的max(prob)即可
-                            kan_prob = math.ceil(m_action['prob'] / (max_dahai_prob + m_action['prob']) * naga_prob_sum)
+                            kan_prob = math.ceil(ap / (max_dahai_prob + ap) * naga_prob_sum)
                         else:
                             # 大明杠正常处理
-                            kan_prob = math.ceil(m_action['prob'] * naga_prob_sum)
+                            assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
+                            kan_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
 
                         n_turn['kan'][-1] = kan_prob
                         huro_info[_naga_huro_types['kan']] = kan_prob
@@ -444,7 +456,6 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                     m_turn = next(m_turns_iter, None)  # 本turn信息使用完毕，跳下一turn
                 except StopIteration:
                     pass
-
     return _write_back_to_naga(naga_dict, naga_text)
 
 
@@ -797,6 +808,16 @@ def parse_report(text: str) -> dict:
 
 if __name__ == '__main__':
     naga_url = sys.argv[1]
+    if naga_url == 'test':
+        from analyzer_test import collected_testcases
+        for c in collected_testcases:
+            sess = requests.session()
+            with sess.get(c) as r:
+                r.encoding = 'utf-8'
+            content = r.text
+            parse_report(content)
+        exit(0)
+
     if 'naga.dmv.nico' not in naga_url:
         naga_url = f'https://naga.dmv.nico/htmls/{naga_url}.html'
     if len(sys.argv) >= 3:
