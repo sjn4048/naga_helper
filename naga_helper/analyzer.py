@@ -188,7 +188,17 @@ def _get_riichi_pai(tehai: list[str]) -> list[str]:
         # 遍历每种牌，看看是否去掉之后向听数仍然为0
         tehai_cp = tehai[:]
         tehai_cp.remove(t)
-        new_st = st.calculate_shanten(_naga_tehai_to_tiles(tehai_cp, None))
+
+        # mahjong库的七对子shanten计算有问题，体现在它会认为龙七对是合法听牌，需要手动处理
+        tiles_34 = _naga_tehai_to_tiles(tehai_cp, None)
+        regular_st = st.calculate_shanten_for_regular_hand(tiles_34)
+        kokushi_st = st.calculate_shanten_for_kokushi_hand(tiles_34)
+        chiitoitsu_st = st.calculate_shanten_for_chiitoitsu_hand(tiles_34)
+        if chiitoitsu_st == 0:
+            # 含有暗刻的13张牌无法视为七对听牌
+            if any([x for x in tiles_34 if x == 3]):
+                chiitoitsu_st = 1
+        new_st = min([regular_st, kokushi_st, chiitoitsu_st])
         if new_st == 0:
             riichi_candidates.append(t)
 
@@ -437,7 +447,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                                     a['prob'] * naga_prob_sum * m_riichi_prob)
                     else:
                         # 只有一种立直选择
-                        assert len(riichi_candidates) == 1, riichi_candidates
+                        assert len(riichi_candidates) == 1, f'{game_idx}-{turn_idx} Expected only one riichi_candidates, got {riichi_candidates}'
                         m_pred[int(_naga_B[riichi_candidates[0]])] += naga_prob_sum * m_riichi_prob
 
                 m_pred = _normalize_to_sum(m_pred, naga_prob_sum, precise=False)
