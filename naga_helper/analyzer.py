@@ -379,9 +379,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                         huro_info[_naga_huro_types['pon']] = pon_prob
                         # print(f'pon: {pon_prob}')
                     if action['type'] == 'none':
-                        none_prob = math.ceil(ap * naga_prob_sum)
-                        huro_info[_naga_huro_types['pass']] = none_prob
-                        # print(f'none: {none_prob}')
+                        huro_info[_naga_huro_types['pass']] = math.ceil(ap * naga_prob_sum)
                     if action['type'] == 'chi':
                         # 需要判定是哪一种吃
                         chi_pai = int(action['pai'][0])
@@ -393,11 +391,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                         else:
                             naki_act = 'chi2'
                         assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
-                        if abs(ap-0.3850) < 0.001:
-                            print(ap, none_prob)
                         chi_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
-                        if abs(ap-0.3850) < 0.001:
-                            print(chi_prob)
                         # print(chi_prob)
                         huro_info[_naga_huro_types[naki_act]] = chi_prob
                         # print(f'{naki_act}: {chi_prob}')
