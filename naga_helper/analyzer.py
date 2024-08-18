@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from mahjong.shanten import Shanten
 from mahjong.tile import TilesConverter
 import sys
+from tqdm import tqdm
 import requests
 
 
@@ -358,6 +359,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                 max_dahai_prob = 0
                 sum_dahai_prob = 0  # 计算所有切牌（非立直、非加杠）概率之和。注意，这里要使用累加切牌概率，而不是1减去立直/加杠的概率，因为有时候Mortal的prob给的过于极端，使1 - riichi_prob_sum - kan_prob_sum之后为0，导致除0异常
                 none_prob = -1  # 计算鸣牌巡 pass 的比例
+                max_naki_prob = -1  # 计算鸣牌巡非 pass 操作中最高值；用于当有多个操作均高于 pass 时区分高低
                 can_dahai = False
                 for ma in m_turn['details']:
                     at = ma['action']['type']
@@ -368,6 +370,8 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                         max_dahai_prob = max(max_dahai_prob, ap)
                     if at == 'none':
                         none_prob = ap
+                    if at in ['chi', 'pon', 'kan']:
+                        max_naki_prob = max(max_naki_prob, ap)
 
                 for m_action in m_turn['details']:
                     action = m_action['action']
@@ -385,12 +389,16 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
 
                     if action['type'] == 'pon':
                         assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
-                        pon_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
+                        if ap > none_prob and ap != max_naki_prob:
+                            # 按比例折算鸣牌条，加上一个(ap + 1) / (max_naki_prob + 1)的修正
+                            pon_prob = math.ceil((0.5 + (max_naki_prob / (max_naki_prob + none_prob) - 0.5) * ap / max_naki_prob) * naga_prob_sum)
+                        else:
+                            pon_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
                         huro_info[_naga_huro_types['pon']] = pon_prob
                         # print(f'pon: {pon_prob}')
-                    if action['type'] == 'none':
+                    elif action['type'] == 'none':
                         huro_info[_naga_huro_types['pass']] = math.ceil(ap * naga_prob_sum)
-                    if action['type'] == 'chi':
+                    elif action['type'] == 'chi':
                         # 需要判定是哪一种吃
                         chi_pai = int(action['pai'][0])
                         consumed_pai = [int(x[0]) for x in action['consumed']]
@@ -401,18 +409,26 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                         else:
                             naki_act = 'chi2'
                         assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
-                        chi_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
+                        if ap > none_prob and ap != max_naki_prob:
+                            # 按比例折算鸣牌条，加上一个(ap + 1) / (max_naki_prob + 1)的修正
+                            chi_prob = math.ceil((0.5 + (max_naki_prob / (max_naki_prob + none_prob) - 0.5) * ap / max_naki_prob) * naga_prob_sum)
+                        else:
+                            chi_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
                         # print(chi_prob)
                         huro_info[_naga_huro_types[naki_act]] = chi_prob
                         # print(f'{naki_act}: {chi_prob}')
-                    if action['type'] == 'kan':
+                    elif action['type'] == 'kan':
                         if can_dahai:
                             # 同理，暗杠/加杠概率不需要超过50%，仅需超过所有非加杠切牌的max(prob)即可
                             kan_prob = math.ceil(ap / (max_dahai_prob + ap) * naga_prob_sum)
                         else:
                             # 大明杠正常处理
                             assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
-                            kan_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
+                            if ap > none_prob and ap != max_naki_prob:
+                                # 按比例折算鸣牌条，加上一个(ap + 1) / (max_naki_prob + 1)的修正
+                                kan_prob = math.ceil((0.5 + (max_naki_prob / (max_naki_prob + none_prob) - 0.5) * ap / max_naki_prob) * naga_prob_sum)
+                            else:
+                                kan_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
 
                         n_turn['kan'][-1] = kan_prob
                         huro_info[_naga_huro_types['kan']] = kan_prob
@@ -814,12 +830,25 @@ if __name__ == '__main__':
     naga_url = sys.argv[1]
     if naga_url == 'test':
         from analyzer_test import collected_testcases
-        for c in collected_testcases:
-            sess = requests.session()
-            with sess.get(c) as r:
-                r.encoding = 'utf-8'
-            content = r.text
-            parse_report(content)
+        for c in tqdm(collected_testcases):
+            if isinstance(c, str):
+                sess = requests.session()
+                with sess.get(c) as r:
+                    r.encoding = 'utf-8'
+                content = r.text
+                parse_report(content)
+            elif isinstance(c, list):
+                n, m = c
+                sess = requests.session()
+                with sess.get(n) as r:
+                    r.encoding = 'utf-8'
+
+                content = r.text
+                if m:
+                    # 需要合并Mortal进来
+                    mortal_url = f'https://mjai.ekyu.moe/report/{m}.json'
+                    content = merge_mortal_to_naga(content, requests.get(mortal_url).text)
+                parse_report(content)
         exit(0)
 
     if 'naga.dmv.nico' not in naga_url:

@@ -5,3 +5,4 @@ bs4~=0.0.1
 beautifulsoup4~=4.11.1
 mahjong~=1.2.1
 setuptools~=65.5.1
+tqdm
