@@ -1,8 +1,12 @@
 import functools
 import json
 import math
+import os
 import re
 from collections import defaultdict
+
+from analyzer_test import collected_testcases
+
 import demjson3 as demjson
 import numpy as np
 from bs4 import BeautifulSoup
@@ -388,12 +392,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                                 ap / (max_dahai_prob + ap) * naga_prob_sum)
 
                     if action['type'] == 'pon':
-                        assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
-                        if ap > none_prob and ap != max_naki_prob:
-                            # 按比例折算鸣牌条，加上一个(ap + 1) / (max_naki_prob + 1)的修正
-                            pon_prob = math.ceil((0.5 + (max_naki_prob / (max_naki_prob + none_prob) - 0.5) * ap / max_naki_prob) * naga_prob_sum)
-                        else:
-                            pon_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
+                        pon_prob = _calc_mortal_naki_prob(ap, max_naki_prob, naga_prob_sum, none_prob)
                         huro_info[_naga_huro_types['pon']] = pon_prob
                         # print(f'pon: {pon_prob}')
                     elif action['type'] == 'none':
@@ -408,12 +407,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                             naki_act = 'chi3'
                         else:
                             naki_act = 'chi2'
-                        assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
-                        if ap > none_prob and ap != max_naki_prob:
-                            # 按比例折算鸣牌条，加上一个(ap + 1) / (max_naki_prob + 1)的修正
-                            chi_prob = math.ceil((0.5 + (max_naki_prob / (max_naki_prob + none_prob) - 0.5) * ap / max_naki_prob) * naga_prob_sum)
-                        else:
-                            chi_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
+                        chi_prob = _calc_mortal_naki_prob(ap, max_naki_prob, naga_prob_sum, none_prob)
                         # print(chi_prob)
                         huro_info[_naga_huro_types[naki_act]] = chi_prob
                         # print(f'{naki_act}: {chi_prob}')
@@ -423,12 +417,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                             kan_prob = math.ceil(ap / (max_dahai_prob + ap) * naga_prob_sum)
                         else:
                             # 大明杠正常处理
-                            assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
-                            if ap > none_prob and ap != max_naki_prob:
-                                # 按比例折算鸣牌条，加上一个(ap + 1) / (max_naki_prob + 1)的修正
-                                kan_prob = math.ceil((0.5 + (max_naki_prob / (max_naki_prob + none_prob) - 0.5) * ap / max_naki_prob) * naga_prob_sum)
-                            else:
-                                kan_prob = math.ceil(ap / (ap + none_prob) * naga_prob_sum)
+                            kan_prob = _calc_mortal_naki_prob(ap, max_naki_prob, naga_prob_sum, none_prob)
 
                         n_turn['kan'][-1] = kan_prob
                         huro_info[_naga_huro_types['kan']] = kan_prob
@@ -477,6 +466,16 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
                 except StopIteration:
                     pass
     return _write_back_to_naga(naga_dict, naga_text)
+
+
+def _calc_mortal_naki_prob(ap, max_naki_prob, prob_sum, none_prob):
+    assert none_prob >= 0, f'none prob should exist. Got {none_prob}'
+    if ap > none_prob and ap != max_naki_prob:
+        # 高于None，但是有其他更高的选项。此时按比例折算鸣牌条
+        ret = math.ceil((0.5 + (max_naki_prob / (max_naki_prob + none_prob) - 0.5) * ap / max_naki_prob) * prob_sum)
+    else:
+        ret = math.ceil(ap / (ap + none_prob) * prob_sum)
+    return ret
 
 
 def _naga_tehai_to_tiles(tehai: list[str], nakis: list[str] = None):
@@ -565,12 +564,14 @@ def parse_report(text: str) -> dict:
     bad_moves = defaultdict(lambda: defaultdict(int))
     bad_moves_info = defaultdict(lambda: defaultdict(list))
     naga_rate = defaultdict(lambda: defaultdict(float))
+    deal_in_avoided_count = defaultdict(lambda: defaultdict(int))  # 避铳次数
     decision_danger = defaultdict(float)
     rank_uplift = defaultdict(float)
     naga_consensus = defaultdict(int)
     shantens = defaultdict(int)
     shanten_start = defaultdict(dict)
     shantens_diff = defaultdict(int)
+    deal_in_count = defaultdict(int)  # 放铳次数
 
     try:
         player_names = variables_dict['playerInfo']['name']
@@ -605,7 +606,18 @@ def parse_report(text: str) -> dict:
         dora_marker = game[0]['info']['msg']['dora_marker']
         dora_marker = _to_normal_hai(dora_marker)
 
+        end_msg = game[0]['info']['msg']['end_msgs']
+        # 放铳玩家
+        deal_in_actor = None
+        for em in end_msg:
+            if em['type'] == 'hora' and em['target'] != em['actor']:
+                deal_in_actor = int(em['target'])
+                # print(f'{game_name} deal_in_actor: {deal_in_actor} ({em})')
+                break
+
         for turn_idx, turn in enumerate(game):
+            is_deal_in_round = deal_in_actor is not None and turn_idx == len(game) - 2
+
             if 'tehais' in turn['info']['msg']['p_msg']:
                 # 首巡初始化手牌与副露牌
                 tehais = turn['info']['msg']['p_msg']['tehais']
@@ -642,6 +654,11 @@ def parse_report(text: str) -> dict:
             if sum(turn['dahai_pred'][one_naga_idx]) == 0:
                 # 没有pred不考虑（一般是因为立直了）
                 continue
+            if is_deal_in_round:
+                # 如果放铳，那么最后的切牌者一定是放铳者
+                assert deal_in_actor is None or deal_in_actor == actor_idx
+                # print('Dealt in!')
+                deal_in_count[actor_name] += 1
 
             real_dahai: str | None = turn['info']['msg'].get('real_dahai')
             if not real_dahai:
@@ -742,6 +759,12 @@ def parse_report(text: str) -> dict:
                 is_bad_move = norm_pred[real] < .05
                 naga_rate[naga_name][actor_name] += abs(norm_pred[real] - max(norm_pred))
                 decision_same[naga_name][actor_name] += int(pred == real)
+
+                if is_deal_in_round and pred != real:
+                    # 视为可以避铳
+                    # TODO：有时候AI判断不一致，但也会放铳，要判断。但如果只使用machi字段，会导致形听判断错误。终极解决方法还是引入有役判断
+                    deal_in_avoided_count[naga_name][actor_name] += 1
+
                 if is_bad_move:
                     bad_moves[naga_name][actor_name] += 1
                     # 可能的恶手原因
@@ -809,6 +832,7 @@ def parse_report(text: str) -> dict:
                     'shanten_avg': round(shantens[k] / decision_count[k], 3),
                     'shanten_uplift': round(shantens_diff[k] / decision_count[k], 3),
                     'shanten_start': round(sum(shanten_start[k].values()) / max(1, len(shanten_start[k])), 3),
+                    'deal_in_count': deal_in_count[k]
                 }
             ret[k][naga_name] = {
                 'accuracy': round(decision_same[naga_name][k] / decision_count[k], 3),
@@ -816,6 +840,7 @@ def parse_report(text: str) -> dict:
                     (decision_count[k] - naga_rate[naga_name][k]) / decision_count[k] * 100, 3),
                 'bad_rate': round(bad_moves[naga_name][k] / decision_count[k], 3),
                 'bad_info': bad_moves_info[naga_name][k],
+                'deal_in_avoided_count': deal_in_avoided_count[naga_name][k],
             }
             # 特别的，如果accuracy为0，则rate也为0，这是因为Mortal只绑定了一个视角
             if ret[k][naga_name]['accuracy'] == 0:
@@ -826,45 +851,75 @@ def parse_report(text: str) -> dict:
     return ret
 
 
-if __name__ == '__main__':
+def get_naga_text(key: str, cache: bool = True) -> str:
+    if 'naga.dmv.nico' not in key:
+        _naga_url = f'https://naga.dmv.nico/htmls/{key}.html'
+    else:
+        _naga_url = key
+    _filename = _naga_url.split('/')[-1]
+
+    path = 'data/cached/naga'
+    if cache:
+        os.makedirs(path, exist_ok=True)
+        if os.path.exists(f'{path}/{_filename}'):
+            with open(f'{path}/{_filename}', 'r', encoding='utf8') as f:
+                return f.read()
+    with requests.get(_naga_url) as _r:
+        _r.encoding = 'utf-8'
+    _content = _r.text
+
+    if cache:
+        with open(f'{path}/{_filename}', 'w', encoding='utf8') as f:
+            f.write(_content)
+    return _content
+
+
+def get_mortal_text(key: str, cache: bool = True) -> str:
+    path = 'data/cached/mortal'
+    if not key.endswith('.json'):
+        _filename = key + '.json'
+    else:
+        _filename = key
+
+    if cache:
+        os.makedirs(path, exist_ok=True)
+        if os.path.exists(f'{path}/{_filename}'):
+            with open(f'{path}/{_filename}', 'r', encoding='utf8') as f:
+                return f.read()
+    _content = requests.get(f'https://mjai.ekyu.moe/report/{key}.json').text
+
+    if cache:
+        with open(f'{path}/{_filename}', 'w', encoding='utf8') as f:
+            f.write(_content)
+    return _content
+
+
+def main():
     naga_url = sys.argv[1]
     if naga_url == 'test':
-        from analyzer_test import collected_testcases
         for c in tqdm(collected_testcases):
             if isinstance(c, str):
-                sess = requests.session()
-                with sess.get(c) as r:
-                    r.encoding = 'utf-8'
-                content = r.text
+                content = get_naga_text(c)
                 parse_report(content)
             elif isinstance(c, list):
                 n, m = c
-                sess = requests.session()
-                with sess.get(n) as r:
-                    r.encoding = 'utf-8'
-
-                content = r.text
+                content = get_naga_text(n)
                 if m:
                     # 需要合并Mortal进来
-                    mortal_url = f'https://mjai.ekyu.moe/report/{m}.json'
-                    content = merge_mortal_to_naga(content, requests.get(mortal_url).text)
+                    content = merge_mortal_to_naga(content, get_mortal_text(m))
                 parse_report(content)
-        exit(0)
+        return
 
-    if 'naga.dmv.nico' not in naga_url:
-        naga_url = f'https://naga.dmv.nico/htmls/{naga_url}.html'
     if len(sys.argv) >= 3:
         mtk = sys.argv[2]
     else:
         mtk = None
-
-    sess = requests.session()
-    with sess.get(naga_url) as r:
-        r.encoding = 'utf-8'
-
-    content = r.text
+    content = get_naga_text(naga_url)
     if mtk:
         # 需要合并Mortal进来
-        mortal_url = f'https://mjai.ekyu.moe/report/{mtk}.json'
-        content = merge_mortal_to_naga(content, requests.get(mortal_url).text)
+        content = merge_mortal_to_naga(content, get_mortal_text(mtk))
     print(parse_report(content))
+
+
+if __name__ == '__main__':
+    main()
