@@ -210,11 +210,11 @@ def _get_riichi_pai(tehai: list[str]) -> list[str]:
     return riichi_candidates
 
 
-def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
+def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -> str:
     naga_replace_d_rev = {v: k for k, v in _naga_replace_d.items()}
 
     try:
-        mortal_data = json.loads(mortal_text)
+        mortal_data = json.loads(m_text)
     except json.decoder.JSONDecodeError:
         print('Cannot load mortal_text')
         return naga_text
@@ -227,7 +227,7 @@ def merge_mortal_to_naga(naga_text: str, mortal_text: str) -> str:
     if naga_types is None:
         raise NotImplementedError('Does not support oldest naga reports')
     mortal_idx = max(naga_types.keys()) + 1
-    naga_types[mortal_idx] = 'Mortal'
+    naga_types[mortal_idx] = m_model
     naga_dict['nagaTypes'] = naga_types
     naga_prob_sum = 10000
     m_actor_id = mortal_data['player_id']
@@ -851,7 +851,7 @@ def parse_report(text: str) -> dict:
     return ret
 
 
-def get_naga_text(key: str, cache: bool = True) -> str:
+def get_naga_text(key: str, cache: bool = False) -> str:
     if 'naga.dmv.nico' not in key:
         _naga_url = f'https://naga.dmv.nico/htmls/{key}.html'
     else:
@@ -874,7 +874,7 @@ def get_naga_text(key: str, cache: bool = True) -> str:
     return _content
 
 
-def get_mortal_text(key: str, cache: bool = True) -> str:
+def get_mortal_text(key: str, cache: bool = False) -> str:
     path = 'data/cached/mortal'
     if not key.endswith('.json'):
         _filename = key + '.json'
@@ -897,24 +897,36 @@ def get_mortal_text(key: str, cache: bool = True) -> str:
 def main():
     naga_url = sys.argv[1]
     if naga_url == 'test':
-        for c in tqdm(collected_testcases):
+        test_path = 'data/cached/result'
+        os.makedirs(test_path, exist_ok=True)
+        for idx, c in enumerate(tqdm(collected_testcases)):
             if isinstance(c, str):
-                content = get_naga_text(c)
-                parse_report(content)
+                content = get_naga_text(c, cache=True)
+                ret = parse_report(content)
             elif isinstance(c, list):
                 n, m = c
-                content = get_naga_text(n)
-                if m:
-                    # 需要合并Mortal进来
-                    content = merge_mortal_to_naga(content, get_mortal_text(m))
-                parse_report(content)
+                content = get_naga_text(n, cache=True)
+                if not m:
+                    raise ValueError(f'Expected mortal info. Got {m} in {c}')
+                # 需要合并Mortal进来
+                assert isinstance(m, dict)
+                for m_model, m_key in m.items():
+                    content = merge_mortal_to_naga(content, get_mortal_text(m_key), m_model)
+                ret = parse_report(content)
+            else:
+                raise TypeError(f'Expected string or list. Got {type(c)}: {c}')
+            with open(f'{test_path}/case-{idx}.html', 'w', encoding='utf8') as f:
+                f.write(content)
+            with open(f'{test_path}/case-{idx}.json', 'w', encoding='utf8') as f:
+                json.dump(ret, f, ensure_ascii=False, indent=4)
+
         return
 
     if len(sys.argv) >= 3:
         mtk = sys.argv[2]
     else:
         mtk = None
-    content = get_naga_text(naga_url)
+    content = get_naga_text(naga_url, cache=True)
     if mtk:
         # 需要合并Mortal进来
         content = merge_mortal_to_naga(content, get_mortal_text(mtk))
