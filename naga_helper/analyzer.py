@@ -5,8 +5,6 @@ import os
 import re
 from collections import defaultdict
 
-from analyzer_test import collected_testcases
-
 import demjson3 as demjson
 import numpy as np
 from bs4 import BeautifulSoup
@@ -897,6 +895,7 @@ def get_mortal_text(key: str, cache: bool = False) -> str:
 def main():
     naga_url = sys.argv[1]
     if naga_url == 'test':
+        from analyzer_test import collected_testcases
         test_path = 'data/cached/result'
         os.makedirs(test_path, exist_ok=True)
         for idx, c in enumerate(tqdm(collected_testcases)):
