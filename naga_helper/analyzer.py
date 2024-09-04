@@ -363,9 +363,12 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -
                 none_prob = -1  # 计算鸣牌巡 pass 的比例
                 max_naki_prob = -1  # 计算鸣牌巡非 pass 操作中最高值；用于当有多个操作均高于 pass 时区分高低
                 can_dahai = False
+                reach_prob = 0  # 立直概率。如果不存在立直选项，则概率为0。只有立直需要特殊处理，暗杠不需要，因为暗杠的代替事件为打牌，但立直的代替事件为宣言+打牌
                 for ma in m_turn['details']:
                     at = ma['action']['type']
                     ap = ma['prob']
+                    if at == 'reach':
+                        reach_prob = ap
                     if at == 'dahai':
                         can_dahai = True
                         sum_dahai_prob += ap
@@ -381,7 +384,7 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -
                     ap = m_action['prob']
                     if action['type'] == 'dahai':
                         m_pred[int(_naga_B[action['pai']])] += math.ceil(
-                            ap / sum_dahai_prob * naga_prob_sum)
+                            ap / sum_dahai_prob * naga_prob_sum * (1 - reach_prob))  # 打牌时要减去立直概率，否则会出现Mortal满条立直，但是加权后打牌条中dama条更高的情况
                     if action['type'] == 'reach':
                         # dama自摸的时候可能没有reach条
                         if 'reach' in n_turn:
@@ -412,7 +415,7 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -
                     elif action['type'] == 'kan':
                         if can_dahai:
                             # 同理，暗杠/加杠概率不需要超过50%，仅需超过所有非加杠切牌的max(prob)即可
-                            kan_prob = math.ceil(ap / (max_dahai_prob + ap) * naga_prob_sum)
+                            kan_prob = math.ceil(ap / (max_dahai_prob + ap) * naga_prob_sum * (1 - reach_prob))
                         else:
                             # 大明杠正常处理
                             kan_prob = _calc_mortal_naki_prob(ap, max_naki_prob, naga_prob_sum, none_prob)
@@ -425,7 +428,7 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -
                     n_turn['huro'][str(m_actor_id)][-1] = huro_info
                     # print(n_turn['huro'])
 
-                # 宣言和立直在Mortal是两个事件，NAGA是一个事件，需要把宣言牌的概率加到NAGA上
+                # 宣言和立直在Mortal(mjai)是两个事件，NAGA是一个事件，需要把宣言牌的概率加到NAGA上
                 player_chosen_riichi = m_turn['actual']['type'] == 'reach'
                 if player_chosen_riichi:
                     # Mortal立直概率
