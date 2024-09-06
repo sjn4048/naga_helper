@@ -208,6 +208,7 @@ def _get_riichi_pai(tehai: list[str]) -> list[str]:
     return riichi_candidates
 
 
+# 每次只允许合并一个 Mortal 解析。m_model 是 NAGA中最终显示的唯一key。如果同一个 m_model 有多个视角，那么他们将被合并为一个。
 def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -> str:
     naga_replace_d_rev = {v: k for k, v in _naga_replace_d.items()}
 
@@ -224,9 +225,14 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -
     naga_types: dict | None = naga_dict.get('nagaTypes', None)
     if naga_types is None:
         raise NotImplementedError('Does not support oldest naga reports')
-    mortal_idx = max(naga_types.keys()) + 1
-    naga_types[mortal_idx] = m_model
-    naga_dict['nagaTypes'] = naga_types
+    m_model_existed = m_model in naga_types.values()
+
+    if not m_model_existed:
+        # m_model 不存在时，才加入 naga_types
+        mortal_idx = max(naga_types.keys()) + 1
+        naga_types[mortal_idx] = m_model
+        naga_dict['nagaTypes'] = naga_types
+
     naga_prob_sum = 10000
     m_actor_id = mortal_data['player_id']
 
@@ -321,21 +327,22 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -
             n_left_hai_num = n_turn['info']['msg']['left_hai_num']
             is_naki_turn = False
 
-            # 做保底的修改。注意要赋值值而不是引用，否则后面会改挂
-            if 'huro' in n_turn:
-                for k in n_turn['huro']:
-                    n_turn['huro'][k].append(n_turn['huro'][k][0].copy())
-            if 'kan' in n_turn:
-                n_turn['kan'].append(n_turn['kan'][0])
-            if 'reach' in n_turn:
-                n_turn['reach'].append(n_turn['reach'][0])
-            if 'dahai_pred' in n_turn:
-                n_turn['dahai_pred'].append([0] * 34)
-                n_turn['info']['msg']['pred_dahai'].append(n_turn['info']['msg']['pred_dahai'][0][:])
-            else:
-                # 没有dahai_pred直接continue
-                # continue
-                pass
+            if not m_model_existed:
+                # 当前 model 不存在时，做保底的修改。注意要拷贝值而不是引用，否则后面会改挂
+                if 'huro' in n_turn:
+                    for k in n_turn['huro']:
+                        n_turn['huro'][k].append(n_turn['huro'][k][0].copy())
+                if 'kan' in n_turn:
+                    n_turn['kan'].append(n_turn['kan'][0])
+                if 'reach' in n_turn:
+                    n_turn['reach'].append(n_turn['reach'][0])
+                if 'dahai_pred' in n_turn:
+                    n_turn['dahai_pred'].append([0] * 34)
+                    n_turn['info']['msg']['pred_dahai'].append(n_turn['info']['msg']['pred_dahai'][0][:])
+                else:
+                    # 没有dahai_pred直接continue
+                    # continue
+                    pass
             if not has_mortal_game:
                 continue
 
@@ -790,7 +797,7 @@ def parse_report(text: str) -> dict:
                             tehais_after_pred.remove(t)
                             break
                     else:
-                        raise ValueError(f'Cannot find discard target {pred} from {tehais_after_pred}')
+                        raise ValueError(f'Cannot find discard target {pred} from {tehais_after_pred} ({game_name}-{turn_idx})')
                     pred_maisuu, _ = _calculate_maisuu(tehais_after_pred, visible_maisuu[actor_idx], nakis[actor_idx])
 
                     # 进攻系列
@@ -913,7 +920,11 @@ def main():
                 # 需要合并Mortal进来
                 assert isinstance(m, dict)
                 for m_model, m_key in m.items():
-                    content = merge_mortal_to_naga(content, get_mortal_text(m_key), m_model)
+                    if isinstance(m_key, str):
+                        content = merge_mortal_to_naga(content, get_mortal_text(m_key), m_model)
+                    else:
+                        for mk in m_key:
+                            content = merge_mortal_to_naga(content, get_mortal_text(mk), m_model)
                 ret = parse_report(content)
             else:
                 raise TypeError(f'Expected string or list. Got {type(c)}: {c}')
