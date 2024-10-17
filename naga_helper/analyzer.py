@@ -586,6 +586,23 @@ def parse_report(text: str) -> dict:
     except (ValueError, TypeError):
         player_names = ['P1', 'P2', 'P3', 'P4']
 
+    # Player Names中可能出现同名（比如大战三个NoName），此时需要根据座位来区分。如果没有重名，则不需要修改；有重名，则改为原名 + (seat)
+    seat_names = ['E', 'S', 'W', 'N']
+    name_count = defaultdict(int)
+    for name in player_names:
+        name_count[name] += 1
+
+    # 如果有重复的名称，根据座位来区分
+    if any(count > 1 for count in name_count.values()):
+        unique_player_names = []
+        for i, name in enumerate(player_names):
+            if name_count[name] > 1:
+                unique_name = f"{name}({seat_names[i]})"
+            else:
+                unique_name = name
+            unique_player_names.append(unique_name)
+        player_names = unique_player_names
+
     naga_types: dict | None = variables_dict.get('nagaTypes', None)
     if naga_types is None:
         raise NotImplementedError('Does not support oldest naga reports')
