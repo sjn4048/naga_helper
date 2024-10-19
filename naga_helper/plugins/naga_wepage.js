@@ -1,4 +1,3 @@
-keyboard_shortcut = '''
 (function () {
     // 保存原始的 console.log 函数
     const originalConsoleLog = console.log;
@@ -276,4 +275,3 @@ keyboard_shortcut = '''
         }
     });
 })();
-'''
