@@ -185,37 +185,64 @@
                 const user_id = urlParams.get('user_id');
                 const junmu = window.junmu || 'UNKNOWN';
 
+                // 添加输入框和按钮到页面并居中
+                const container = document.createElement('div');
+                container.style.position = 'fixed';
+                container.style.top = '50%';
+                container.style.left = '50%';
+                container.style.transform = 'translate(-50%, -50%)';
+                container.style.display = 'flex';
+                container.style.justifyContent = 'center';
+                container.style.alignItems = 'center';
+                container.style.backgroundColor = 'white';
+                container.style.padding = '10px';
+                container.style.borderRadius = '8px';
+                container.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
 
                 // 创建输入框
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.placeholder = '请输入批注';
                 input.style.width = '300px';
-                input.style.padding = '10px';
+                input.style.padding = '5px';
                 input.style.border = '1px solid #ccc';
                 input.style.borderRadius = '4px';
+                input.style.fontFamily = 'sans-serif';
+
+                // 自动补全
+                const datalist = document.createElement('datalist');
+                datalist.id = 'noteSuggestions';
+                input.setAttribute('list', 'noteSuggestions');
+
+                NoteStrings.forEach(function(suggestion) {
+                  const option = document.createElement('option');
+                  option.value = suggestion;
+                  datalist.appendChild(option);
+                });
 
                 // 创建提交按钮
                 const submitButton = document.createElement('button');
                 submitButton.textContent = '提交';
                 submitButton.style.marginLeft = '10px';
-                submitButton.style.padding = '10px 20px';
+                submitButton.style.padding = '5px 10px';
                 submitButton.style.border = 'none';
-                submitButton.style.backgroundColor = '#007bff';
+                submitButton.style.backgroundColor = '#2891ff';
                 submitButton.style.color = 'white';
                 submitButton.style.borderRadius = '4px';
                 submitButton.style.cursor = 'pointer';
+                submitButton.style.fontFamily = 'sans-serif';
 
                 // 创建关闭按钮
                 const closeButton = document.createElement('button');
                 closeButton.textContent = '关闭';
                 closeButton.style.marginLeft = '10px';
-                closeButton.style.padding = '10px 20px';
+                closeButton.style.padding = '5px 10px';
                 closeButton.style.border = 'none';
-                closeButton.style.backgroundColor = '#dc3545';
+                closeButton.style.backgroundColor = '#ff2135';
                 closeButton.style.color = 'white';
                 closeButton.style.borderRadius = '4px';
                 closeButton.style.cursor = 'pointer';
+                closeButton.style.fontFamily = 'sans-serif';
 
                 // 点击提交按钮时触发回调函数
                 submitButton.addEventListener('click', function () {
@@ -248,20 +275,7 @@
                         inNote = false;
                     }
                 });
-
-                // 添加输入框和按钮到页面并居中
-                const container = document.createElement('div');
-                container.style.position = 'fixed';
-                container.style.top = '50%';
-                container.style.left = '50%';
-                container.style.transform = 'translate(-50%, -50%)';
-                container.style.display = 'flex';
-                container.style.justifyContent = 'center';
-                container.style.alignItems = 'center';
-                container.style.backgroundColor = 'white';
-                container.style.padding = '20px';
-                container.style.borderRadius = '8px';
-                container.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                container.appendChild(datalist);
                 container.appendChild(input);
                 container.appendChild(submitButton);
                 container.appendChild(closeButton);
