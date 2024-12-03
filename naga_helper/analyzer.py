@@ -208,8 +208,11 @@ def _get_riichi_pai(tehai: list[str]) -> list[str]:
     return riichi_candidates
 
 
+_default_model_tag = 'Mortal'
+
+
 # 每次只允许合并一个 Mortal 解析。m_model 是 NAGA中最终显示的唯一key。如果同一个 m_model 有多个视角，那么他们将被合并为一个。
-def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -> str:
+def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> str:
     naga_replace_d_rev = {v: k for k, v in _naga_replace_d.items()}
 
     try:
@@ -219,6 +222,14 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = 'Mortal') -
         return naga_text
     naga_dict = _get_naga_var(naga_text)
     can_merge = _check_if_can_merge(naga_dict['pred'], mortal_data)
+
+    if not m_model or m_model == _default_model_tag:
+        try:
+            # 自动检测model tag
+            m_model = mortal_data['review']['model_tag']
+        except (Exception,):
+            m_model = _default_model_tag
+
     if not can_merge:
         print('Cannot merge mortal and naga. Try anyway')
     # add Mortal to naga player types
@@ -937,6 +948,7 @@ def main():
                 # 需要合并Mortal进来
                 assert isinstance(m, dict)
                 for m_model, m_key in m.items():
+                    m_model = None
                     if isinstance(m_key, str):
                         content = merge_mortal_to_naga(content, get_mortal_text(m_key), m_model)
                     else:
