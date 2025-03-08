@@ -580,6 +580,7 @@ def parse_report(text: str) -> dict:
 
     decision_count = defaultdict(int)
     decision_same = defaultdict(lambda: defaultdict(int))
+    difficulty_rate = defaultdict(lambda: defaultdict(float))
     bad_moves = defaultdict(lambda: defaultdict(int))
     bad_moves_info = defaultdict(lambda: defaultdict(list))
     naga_rate = defaultdict(lambda: defaultdict(float))
@@ -795,6 +796,10 @@ def parse_report(text: str) -> dict:
                 is_bad_move = norm_pred[real] < .05
                 naga_rate[naga_name][actor_name] += abs(norm_pred[real] - max(norm_pred))
                 decision_same[naga_name][actor_name] += int(pred == real)
+                clipped_pred = np.clip(norm_pred, 1e-10, 1 - 1e-10)
+                entropy = -np.sum(clipped_pred * np.log(clipped_pred))
+                max_entropy = np.log(len(clipped_pred))
+                difficulty_rate[naga_name][actor_name] += entropy / max_entropy
 
                 if is_deal_in_round and pred != real:
                     # 视为可以避铳
@@ -872,6 +877,7 @@ def parse_report(text: str) -> dict:
                 }
             ret[k][naga_name] = {
                 'accuracy': round(decision_same[naga_name][k] / decision_count[k], 3),
+                'difficulty': round(difficulty_rate[naga_name][k] / decision_count[k], 3),
                 'rate': round(
                     (decision_count[k] - naga_rate[naga_name][k]) / decision_count[k] * 100, 3),
                 'bad_rate': round(bad_moves[naga_name][k] / decision_count[k], 3),
