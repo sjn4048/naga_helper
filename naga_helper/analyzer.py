@@ -438,7 +438,7 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> st
                             # 大明杠正常处理
                             kan_prob = _calc_mortal_naki_prob(ap, max_naki_prob, naga_prob_sum, none_prob)
                         if 'kan' in n_turn:
-                            n_turn['kan'][-1] = kan_prob
+                            n_turn['kan'][-1] = {'0': naga_prob_sum - kan_prob, '1': kan_prob}
                         huro_info[_naga_huro_types['kan']] = kan_prob
                         # print(f'kan: {kan_prob}')
                 if is_naki_turn:
