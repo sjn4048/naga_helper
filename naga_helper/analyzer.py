@@ -393,7 +393,7 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> st
                         max_dahai_prob = max(max_dahai_prob, ap)
                     if at == 'none':
                         none_prob = ap
-                    if at in ['chi', 'pon', 'kan']:
+                    if at in ['chi', 'pon', 'kan', 'ankan']:
                         max_naki_prob = max(max_naki_prob, ap)
 
                 for m_action in m_turn['details']:
@@ -430,15 +430,15 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> st
                         # print(chi_prob)
                         huro_info[_naga_huro_types[naki_act]] = chi_prob
                         # print(f'{naki_act}: {chi_prob}')
-                    elif action['type'] == 'kan':
+                    elif action['type'] in ['kan', 'ankan']:
                         if can_dahai:
                             # 同理，暗杠/加杠概率不需要超过50%，仅需超过所有非加杠切牌的max(prob)即可
                             kan_prob = math.ceil(ap / (max_dahai_prob + ap) * naga_prob_sum * (1 - reach_prob))
                         else:
                             # 大明杠正常处理
                             kan_prob = _calc_mortal_naki_prob(ap, max_naki_prob, naga_prob_sum, none_prob)
-
-                        n_turn['kan'][-1] = kan_prob
+                        if 'kan' in n_turn:
+                            n_turn['kan'][-1] = kan_prob
                         huro_info[_naga_huro_types['kan']] = kan_prob
                         # print(f'kan: {kan_prob}')
                 if is_naki_turn:
@@ -459,20 +459,24 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> st
                     else:
                         raise ValueError(f'Cannot find reach action from Mortal when player called riichi: {m_turn}')
 
-                    # 将立直条赋值给立直巡目
-                    try:
-                        riichi_m_turn = next(m_turns_iter)
-                    except StopIteration:
-                        riichi_m_turn = None
-                    if riichi_m_turn and riichi_m_turn['tiles_left'] == m_turn['tiles_left']:  # 应对多种立直选择
+                    # fix, 20250525: 如果玩家在选择立直之后还有切牌选择，此时一般是暗杠。
+                    # 原先写法无论如何都会向后取一个切牌，导致暗杠选择被吞掉。因此必须做精准匹配
+                    if len(riichi_candidates) == 0:
+                        raise ValueError(f'Cannot find riichi candidate when player called riichi: {m_turn}')
+                    elif len(riichi_candidates) == 1:
+                        m_pred[int(_naga_B[riichi_candidates[0]])] += naga_prob_sum * m_riichi_prob
+                    else:
+                        # 有不止一种切法，将立直条赋值给立直巡目
+                        try:
+                            riichi_m_turn = next(m_turns_iter)
+                        except StopIteration:
+                            raise ValueError(f'Cannot find riichi-candidate selection action when player called riichi: {m_turn}')
+
+                        assert riichi_m_turn['tiles_left'] == m_turn['tiles_left'], f'Invalid riichi-candidate selection action when player called riichi: {m_turn}'
                         for a in riichi_m_turn['details']:
                             if a['action']['type'] == 'dahai':
                                 m_pred[int(_naga_B[a['action']['pai']])] += int(
                                     a['prob'] * naga_prob_sum * m_riichi_prob)
-                    else:
-                        # 只有一种立直选择
-                        assert len(riichi_candidates) == 1, f'{game_idx}-{turn_idx} Expected only one riichi_candidates, got {riichi_candidates}'
-                        m_pred[int(_naga_B[riichi_candidates[0]])] += naga_prob_sum * m_riichi_prob
 
                 m_pred = _normalize_to_sum(m_pred, naga_prob_sum, precise=False)
                 # 将Mortal结果写回NAGA
