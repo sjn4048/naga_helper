@@ -150,23 +150,27 @@ def _write_back_to_naga(var_dict: dict[str, ...], orig_text: str) -> str:
     script_tags = soup.find_all('script')
 
     for script in script_tags:
-        if script.string:
-            script_content = script.string
-            for var_name, var_value in var_dict.items():
-                # 将变量值转换为JSON字符串
-                # 对nagaTypes特殊处理
-                if var_name == 'nagaTypes':
-                    var_value_str = '{' + ', '.join(
-                        f"{int(k)}: '{v}'" for k, v in var_value.items()) + '}'  # 允许整数作为key类型，与原始naga保持一致
-                else:
-                    var_value_str = json.dumps(var_value, ensure_ascii=False, separators=(',', ':'))
-                # 使用正则表达式替换变量赋值
-                script_content = re.sub(
-                    rf'(const\s+{var_name}\s*=\s*)(.*?)\n',
-                    rf'const {var_name} = {var_value_str}\n',
-                    script_content
-                )
-            script.string.replace_with(script_content)
+        if not script.string:
+            continue
+        script_content = script.string
+        ignore_keys = ['playerInfo']  # playerInfo 需要忽略，否则里边有双引号的话会导致parsing出错
+        for var_name, var_value in var_dict.items():
+            # 将变量值转换为JSON字符串
+            # 对nagaTypes特殊处理
+            if var_name in ignore_keys:
+                continue
+            if var_name == 'nagaTypes':
+                var_value_str = '{' + ', '.join(
+                    f"{int(k)}: '{v}'" for k, v in var_value.items()) + '}'  # 允许整数作为key类型，与原始naga保持一致
+            else:
+                var_value_str = json.dumps(var_value, ensure_ascii=False, separators=(',', ':'))
+            # 使用正则表达式替换变量赋值
+            script_content = re.sub(
+                rf'(const\s+{var_name}\s*=\s*)(.*?)\n',
+                rf'const {var_name} = {var_value_str}\n',
+                script_content
+            )
+        script.string.replace_with(script_content)
 
     return str(soup)
 
@@ -193,6 +197,7 @@ def _get_riichi_pai(tehai: list[str]) -> list[str]:
         tehai_cp.remove(t)
 
         # mahjong库的七对子shanten计算有问题，体现在它会认为龙七对是合法听牌，需要手动处理
+        # 0526: 它也会认为88889这种牌型可以打9立直
         tiles_34 = _naga_tehai_to_tiles(tehai_cp, None)
         regular_st = st.calculate_shanten_for_regular_hand(tiles_34)
         kokushi_st = st.calculate_shanten_for_kokushi_hand(tiles_34)
