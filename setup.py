@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='naga_helper',
-    version='0.2.14',
+    version='0.2.15',
     description='Analyze reports of riichi mahjong AI NAGA and Mortal.',
     long_description=open('README.md', encoding='utf8').read(),
     long_description_content_type='text/markdown',

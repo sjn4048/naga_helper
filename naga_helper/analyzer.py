@@ -1,4 +1,5 @@
 import functools
+import itertools
 import json
 import math
 import os
@@ -484,16 +485,45 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> st
                         m_pred[int(_naga_B[riichi_candidates[0]])] += naga_prob_sum * m_riichi_prob
                     else:
                         # 有不止一种切法，将立直条赋值给立直巡目
+                        should_use_fallback = False
                         try:
+                            # 试探性地获取下一个turn，看看是否是立直后的切牌选择
+                            # 使用tee创建备份，这样如果试探失败可以回退
+                            m_turns_iter, m_turns_iter_backup = itertools.tee(m_turns_iter, 2)
                             riichi_m_turn = next(m_turns_iter)
-                        except StopIteration:
-                            raise ValueError(f'Cannot find riichi-candidate selection action when player called riichi: {m_turn}')
 
-                        assert riichi_m_turn['tiles_left'] == m_turn['tiles_left'], f'Invalid riichi-candidate selection action when player called riichi: {m_turn}'
-                        for a in riichi_m_turn['details']:
-                            if a['action']['type'] == 'dahai':
-                                m_pred[int(_naga_B[a['action']['pai']])] += int(
-                                    a['prob'] * naga_prob_sum * m_riichi_prob)
+                            if riichi_m_turn['tiles_left'] != m_turn['tiles_left']:
+                                # 确实有下一个切牌，但是并非立直当巡。一般出现在①立直巡首先错判了宣言数量 ②后面还有暗杠巡。是个很稀少的情况
+                                # 回退到备份位置，使用兜底逻辑
+                                m_turns_iter = m_turns_iter_backup
+                                should_use_fallback = True
+                            else:
+                                # 正常情况，处理立直后的切牌选择
+                                for a in riichi_m_turn['details']:
+                                    if a['action']['type'] == 'dahai':
+                                        m_pred[int(_naga_B[a['action']['pai']])] += int(
+                                            a['prob'] * naga_prob_sum * m_riichi_prob)
+                        except StopIteration:
+                            should_use_fallback = True
+                        
+                        if should_use_fallback:
+                            # 此处是因为riichi_candidate给出了错误的选项。当手里有四张相同牌时，这张牌将不能成为单骑的选项。因此，这张牌实际上才是唯一的切牌候补
+                            if len(riichi_candidates) == 3:
+                                raise ValueError(f'Cannot find riichi-candidate selection action when player called riichi3: {m_turn}')
+                            count_dict = defaultdict(int)
+                            tehai = m_turn['state']['tehai']
+
+                            for t in tehai:
+                                count_dict[_to_normal_hai(t)] += 1
+
+                            for r in riichi_candidates:
+                                if count_dict[_to_normal_hai(r)] == 4:
+                                    # True candidate
+                                    m_pred[int(_naga_B[r])] += naga_prob_sum * m_riichi_prob
+                                    break
+                            else:
+                                raise ValueError(
+                                    f'Cannot find riichi-candidate selection action when player called riichi2: {m_turn}')
 
                 m_pred = _normalize_to_sum(m_pred, naga_prob_sum, precise=False)
                 # 将Mortal结果写回NAGA
