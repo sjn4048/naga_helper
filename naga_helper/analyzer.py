@@ -442,8 +442,20 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> st
                         else:
                             # 大明杠正常处理
                             kan_prob = _calc_mortal_naki_prob(ap, max_naki_prob, naga_prob_sum, none_prob)
+
+                        # 判断是暗杠还是加杠。Mortal格式中action['type']加杠也会填 ankan，因此不能按此判断。
+                        is_kakan = False
+                        try:
+                            fuuros = m_turn['state']['fuuros']
+                            for f in fuuros:
+                                if m_turn['tile'] in f['consumed']:
+                                    is_kakan = True
+                                    break
+                        except (Exception,):
+                            pass
+
                         if 'kan' in n_turn:
-                            n_turn['kan'][-1] = {'0': naga_prob_sum - kan_prob, '1': kan_prob}
+                            n_turn['kan'][-1] = {'0': naga_prob_sum - kan_prob, '2' if is_kakan else '1': kan_prob}
                         huro_info[_naga_huro_types['kan']] = kan_prob
                         # print(f'kan: {kan_prob}')
                 if is_naki_turn:
