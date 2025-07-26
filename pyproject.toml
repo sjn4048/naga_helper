@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=64.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "naga_helper"
+version = "0.2.16"
+description = "Analyze reports of riichi mahjong AI NAGA and Mortal."
+readme = "README.md"
+authors = [
+    {name = "Jianing Shi", email = "1176827825@qq.com"}
+]
+license = {text = "GNU Affero General Public License v3"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.6"
+keywords = ["mahjong", "riichi", "naga", "mortal", "majsoul", "tenhou", "ai"]
+dependencies = [
+    "demjson3>=3.0.5",
+    "numpy>=1.26.4,<2.0.0",
+    "requests>=2.32.0,<3.0.0",
+    "beautifulsoup4>=4.11.1",
+    "mahjong>=1.2.1,<2.0.0",
+    "tqdm>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/sjn4048/naga_helper"
+Source = "https://github.com/sjn4048/naga_helper"
+
+[tool.setuptools]
+packages = {find = {}}
+include-package-data = true
+
+[tool.setuptools.package-data]
+naga_helper = ["*.md", "*.txt"]
+
+[tool.setuptools.dynamic]
+readme = {file = "README.md", content-type = "text/markdown"}
