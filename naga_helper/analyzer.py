@@ -643,6 +643,7 @@ def parse_report(text: str) -> dict:
     shanten_start = defaultdict(dict)
     shantens_diff = defaultdict(int)
     deal_in_count = defaultdict(int)  # 放铳次数
+    common_bad_moves = defaultdict(int)
 
     try:
         player_names = variables_dict['playerInfo']['name']
@@ -792,6 +793,7 @@ def parse_report(text: str) -> dict:
             score_rank = np.argsort(scores)[::-1][actor_idx] + 1
 
             naga_player_pred = []
+            all_bad_move = True
             decision_count[actor_name] += 1
 
             # 摸牌前的向听
@@ -840,11 +842,14 @@ def parse_report(text: str) -> dict:
             for naga_idx, naga_name in naga_types.items():
                 sum_prob = sum(turn['dahai_pred'][naga_idx])
                 if sum_prob == 0:
+                    all_bad_move = False  # 有模型没有判断，不能算
                     continue
                 norm_pred = np.array(turn['dahai_pred'][naga_idx]) / sum_prob
                 pred = np.argmax(norm_pred)
                 naga_player_pred.append(pred)
                 is_bad_move = norm_pred[real] < .05
+                if not is_bad_move:
+                    all_bad_move = False  # 只要有一个不是bad_move就不是common_bad_move
                 naga_rate[naga_name][actor_name] += abs(norm_pred[real] - max(norm_pred))
                 decision_same[naga_name][actor_name] += int(pred == real)
                 clipped_pred = np.clip(norm_pred, 1e-10, 1 - 1e-10)
@@ -911,6 +916,9 @@ def parse_report(text: str) -> dict:
 
             # NAGA不同模型的一致性
             naga_consensus[actor_name] += int(len(set(naga_player_pred)) == 1)
+            # 新增：统计common_bad_moves
+            if all_bad_move:
+                common_bad_moves[actor_name] += 1
 
     ret = {}
     for k in decision_count.keys():
@@ -924,7 +932,8 @@ def parse_report(text: str) -> dict:
                     'shanten_avg': round(shantens[k] / decision_count[k], 3),
                     'shanten_uplift': round(shantens_diff[k] / decision_count[k], 3),
                     'shanten_start': round(sum(shanten_start[k].values()) / max(1, len(shanten_start[k])), 3),
-                    'deal_in_count': deal_in_count[k]
+                    'deal_in_count': deal_in_count[k],
+                    'common_bad_rate': round(common_bad_moves[k] / decision_count[k], 3),  # 新增：写入统计结果
                 }
             ret[k][naga_name] = {
                 'accuracy': round(decision_same[naga_name][k] / decision_count[k], 3),
