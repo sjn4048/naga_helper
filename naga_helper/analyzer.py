@@ -842,7 +842,6 @@ def parse_report(text: str) -> dict:
             for naga_idx, naga_name in naga_types.items():
                 sum_prob = sum(turn['dahai_pred'][naga_idx])
                 if sum_prob == 0:
-                    all_bad_move = False  # 有模型没有判断，不能算
                     continue
                 norm_pred = np.array(turn['dahai_pred'][naga_idx]) / sum_prob
                 pred = np.argmax(norm_pred)
