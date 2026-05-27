@@ -118,14 +118,39 @@ def _to_mortal_text(naga_text: str) -> str:
     return naga_text
 
 
+# NAGA 在 2026-05 把 viewer 切到 SPA + `/reports/<id>.json.gz` 数据流。
+# 新接口的 JSON 顶层 key 是 snake_case；原 HTML 内嵌变量是 camelCase。
+# 下表是两边的对照。helper 内部统一以 camelCase 处理（与原始 HTML 时代一致），
+# 并提供 `naga_data_to_var_dict` 把新版 dict 转成内部 var_dict。
+_NAGA_DATA_SNAKE_TO_CAMEL = {
+    'pred': 'pred',
+    'player_info': 'playerInfo',
+    'haihu_id': 'haihuId',
+    'naga_version': 'nagaVersion',
+    'game_type': 'gameType',
+    'naga_types': 'nagaTypes',
+    'data_version': 'dataVersion',
+    'report_info': 'reportInfo',
+    'custom_haihu': 'customHaihu',
+}
+
+_NAGA_VAR_WHITELIST = list(_NAGA_DATA_SNAKE_TO_CAMEL.values())
+
+
+def naga_data_to_var_dict(data: dict) -> dict:
+    """把 NAGA 新版 `/reports/<id>.json.gz` 的 snake_case dict 转换为
+    helper 内部使用的 camelCase 变量字典。
+
+    未识别的字段会被忽略。
+    """
+    return {camel: data[snake] for snake, camel in _NAGA_DATA_SNAKE_TO_CAMEL.items() if snake in data}
+
+
 def _get_naga_var(text: str) -> dict[str, ...]:
     soup = BeautifulSoup(text, 'html.parser')
     # read variables
     script_tags = soup.find_all('script')
     variables_dict: dict[..., ...] = {}
-
-    whitelist_keys = ['pred', 'playerInfo', 'haihuId', 'nagaVersion', 'gameType', 'nagaTypes',
-                      'dataVersion', 'reportInfo', 'customHaihu']  # 注入脚本中的变量，不要修改
 
     for script in script_tags:
         # 使用正则表达式找到所有的变量赋值
@@ -133,7 +158,7 @@ def _get_naga_var(text: str) -> dict[str, ...]:
         for match in list(matches):
             var_name = match.group(1)
             var_value = match.group(2)
-            if var_name not in whitelist_keys:
+            if var_name not in _NAGA_VAR_WHITELIST:
                 continue
             try:
                 var_value = json.loads(var_value.replace("'", '"'))
@@ -219,14 +244,40 @@ _default_model_tag = 'Mortal'
 
 # 每次只允许合并一个 Mortal 解析。m_model 是 NAGA中最终显示的唯一key。如果同一个 m_model 有多个视角，那么他们将被合并为一个。
 def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> str:
-    naga_replace_d_rev = {v: k for k, v in _naga_replace_d.items()}
+    """[Legacy] 从 NAGA 自包含 HTML 字符串读入，merge Mortal 后写回 HTML。
 
+    新版 NAGA 的 JSON 数据流推荐使用 `merge_mortal_to_naga_data`。
+    """
     try:
         mortal_data = json.loads(m_text)
     except json.decoder.JSONDecodeError:
         print('Cannot load mortal_text')
         return naga_text
     naga_dict = _get_naga_var(naga_text)
+    _merge_mortal_into_var_dict(naga_dict, mortal_data, m_model)
+    return _write_back_to_naga(naga_dict, naga_text)
+
+
+def merge_mortal_to_naga_data(naga_data: dict, m_text: str, m_model: str = None) -> dict:
+    """从 NAGA 新版 `/reports/<id>.json.gz` 的 snake_case dict 读入，merge Mortal。
+
+    返回 merge 后的 camelCase 变量字典（与 `_get_naga_var` 兼容）。
+    若解析 Mortal 失败，则返回原始 var_dict。
+    """
+    var_dict = naga_data_to_var_dict(naga_data)
+    try:
+        mortal_data = json.loads(m_text)
+    except json.decoder.JSONDecodeError:
+        print('Cannot load mortal_text')
+        return var_dict
+    _merge_mortal_into_var_dict(var_dict, mortal_data, m_model)
+    return var_dict
+
+
+def _merge_mortal_into_var_dict(naga_dict: dict, mortal_data: dict, m_model: str = None) -> None:
+    """In-place 把 Mortal 数据 merge 到 naga 的 camelCase 变量字典里。"""
+    naga_replace_d_rev = {v: k for k, v in _naga_replace_d.items()}
+
     can_merge = _check_if_can_merge(naga_dict['pred'], mortal_data)
 
     if not m_model or m_model == _default_model_tag:
@@ -535,7 +586,6 @@ def merge_mortal_to_naga(naga_text: str, m_text: str, m_model: str = None) -> st
                     m_turn = next(m_turns_iter, None)  # 本turn信息使用完毕，跳下一turn
                 except StopIteration:
                     pass
-    return _write_back_to_naga(naga_dict, naga_text)
 
 
 def _calc_mortal_naki_prob(ap, max_naki_prob, prob_sum, none_prob):
@@ -608,26 +658,29 @@ def _to_normal_hai(s: str) -> str:
 
 @functools.lru_cache(maxsize=100, typed=False)
 def parse_report(text: str) -> dict:
-    soup = BeautifulSoup(text, 'html.parser')
-    # read variables
-    script_tags = soup.find_all('script')
-    variables_dict: dict[..., ...] = {}
-    stc = Shanten()
+    """[Legacy] 解析 NAGA 自包含 HTML，返回每个玩家的统计指标。
 
-    for script in script_tags:
-        # 使用正则表达式找到所有的变量赋值
-        matches = re.finditer(r'const\s+(\w+)\s*=\s*(.*?)\n', script.string if script.string else '')
-        for match in list(matches):
-            var_name = match.group(1)
-            var_value = match.group(2)
-            try:
-                var_value = json.loads(var_value.replace("'", '"'))
-            except json.decoder.JSONDecodeError:
-                try:
-                    var_value = demjson.decode(var_value.replace("'", '"'))
-                except demjson.JSONDecodeError:
-                    pass
-            variables_dict[var_name] = var_value
+    新版 NAGA 的 JSON 数据流推荐使用 `parse_report_from_data`。
+    """
+    return _parse_report_from_var_dict(_get_naga_var(text))
+
+
+def parse_report_from_data(data: dict) -> dict:
+    """解析 NAGA 新版 `/reports/<id>.json.gz` 的 snake_case dict，返回每个玩家的统计指标。"""
+    return _parse_report_from_var_dict(naga_data_to_var_dict(data))
+
+
+def _parse_report_from_var_dict(variables_dict: dict) -> dict:
+    """parse_report 的实际实现：在 camelCase 变量字典上跑统计。
+
+    注意：本函数会就地修改 `variables_dict` 内部的 list/dict（动态维护手牌、副露
+    等状态），所以调用前必须确保不会和别人共享底层结构。这里统一做一次深拷贝避免
+    任何调用方踩坑。
+    """
+    import copy
+    variables_dict = copy.deepcopy(variables_dict)
+
+    stc = Shanten()
 
     decision_count = defaultdict(int)
     decision_same = defaultdict(lambda: defaultdict(int))
