@@ -142,8 +142,35 @@ def naga_data_to_var_dict(data: dict) -> dict:
     helper 内部使用的 camelCase 变量字典。
 
     未识别的字段会被忽略。
+
+    特别地，``naga_types`` 在新版 JSON 里是 ``{"0": "オメガ", ...}`` (str key，
+    JSON 规范决定的)，而旧自包含 HTML 时代是 inline JS 字面量 ``{0: ...}`` (int
+    key)。helper 内部多处 (例如 ``max(naga_types.keys()) + 1``) 都依赖 int key，
+    所以这里在转换时把 ``naga_types`` 的 key 还原为 int，保持与旧 HTML 入口
+    完全一致的下游行为。
     """
-    return {camel: data[snake] for snake, camel in _NAGA_DATA_SNAKE_TO_CAMEL.items() if snake in data}
+    out = {camel: data[snake] for snake, camel in _NAGA_DATA_SNAKE_TO_CAMEL.items() if snake in data}
+    naga_types = out.get('nagaTypes')
+    if isinstance(naga_types, dict):
+        out['nagaTypes'] = _normalize_naga_types_keys(naga_types)
+    return out
+
+
+def _normalize_naga_types_keys(naga_types: dict) -> dict:
+    """把 nagaTypes 的 key 统一成 int（兼容来自 JSON 的 str key）。
+
+    - 全数字字符串 / int → int(...)
+    - 其他保持原样（防御性，不应该出现）
+    """
+    fixed = {}
+    for k, v in naga_types.items():
+        if isinstance(k, int):
+            fixed[k] = v
+        elif isinstance(k, str) and k.lstrip('-').isdigit():
+            fixed[int(k)] = v
+        else:
+            fixed[k] = v
+    return fixed
 
 
 def _get_naga_var(text: str) -> dict[str, ...]:
@@ -277,6 +304,12 @@ def merge_mortal_to_naga_data(naga_data: dict, m_text: str, m_model: str = None)
 def _merge_mortal_into_var_dict(naga_dict: dict, mortal_data: dict, m_model: str = None) -> None:
     """In-place 把 Mortal 数据 merge 到 naga 的 camelCase 变量字典里。"""
     naga_replace_d_rev = {v: k for k, v in _naga_replace_d.items()}
+
+    # 兜底：来自 JSON 反序列化的 nagaTypes 是 str key，下面 max(...) + 1 会爆
+    # `str + int`。新接口在 naga_data_to_var_dict 已经处理过一次，这里再做一次
+    # 幂等的 normalize，覆盖直接喂 var_dict 进来的 caller。
+    if isinstance(naga_dict.get('nagaTypes'), dict):
+        naga_dict['nagaTypes'] = _normalize_naga_types_keys(naga_dict['nagaTypes'])
 
     can_merge = _check_if_can_merge(naga_dict['pred'], mortal_data)
 

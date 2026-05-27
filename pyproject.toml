@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "naga_helper"
-version = "0.3.0"
+version = "0.3.1"
 description = "Analyze reports of riichi mahjong AI NAGA and Mortal."
 readme = "README.md"
 authors = [
